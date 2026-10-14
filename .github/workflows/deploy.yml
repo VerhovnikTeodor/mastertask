@@ -1,0 +1,69 @@
+# Produkcijska objava na Vercel. Zažene se IZKLJUČNO ročno (Actions → Deploy to Vercel → Run workflow).
+#
+# Potrebne skrivnosti repozitorija (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN        – osebni žeton z dostopom do projekta
+#   VERCEL_ORG_ID       – iz .vercel/project.json po `vercel link`
+#   VERCEL_PROJECT_ID   – iz .vercel/project.json po `vercel link`
+#   MIGRATION_DATABASE_URL – samo če želite migracije pognati iz tega workflowa
+#                            (neposredna, ne-pooled povezava do produkcijske baze)
+#
+# Okoljske spremenljivke aplikacije (DATABASE_URL, JWT_SECRET …) se nastavijo v Vercelu, ne tukaj.
+name: Deploy to Vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: 'Pred objavo poženi migracije baze (samo dodajanje, nikoli brisanje)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Preveri skrivnosti
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          missing=0
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Manjka skrivnost $name"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Migracije baze
+        if: ${{ inputs.run_migrations }}
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::Manjka skrivnost MIGRATION_DATABASE_URL"; exit 1; fi
+          npm run db:migrate
+
+      - name: Vercel – pridobi nastavitve okolja
+        run: npx --yes vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Vercel – build
+        run: npx --yes vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Vercel – objava
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

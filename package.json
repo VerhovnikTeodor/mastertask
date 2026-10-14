@@ -1,0 +1,24 @@
+{
+  "name": "mastertask",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MasterTask – upravljanje projektov, ekip in nalog s Kanban tablo",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend",
+    "db:up": "docker compose up -d db",
+    "db:migrate": "npm run migrate -w backend",
+    "db:seed": "npm run seed -w backend",
+    "build": "npm run build -w frontend",
+    "lint": "npm run lint -w frontend && npm run lint -w backend",
+    "test": "npm test -w backend && npm test -w frontend",
+    "typecheck": "npm run typecheck -w frontend"
+  }
+}
