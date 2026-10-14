@@ -10,7 +10,7 @@ backend/    Express API, migracije in seme
 api/        Vercel serverless vstopna točka (/api/* → Express)
 ```
 
-V lokalnem razvoju Vite (5173) posreduje `/api` na API (8001). Na Vercelu ista Express aplikacija teče kot funkcija `api/index.js`, frontend pa se postreže iz `frontend/dist`.
+V lokalnem razvoju Vite (5173) posreduje `/api` na API (8001). Na Vercelu sta v enem projektu dve storitvi: `frontend` (Vite) in `backend` (Express, vstop `backend/src/app.js`). Javni promet na `/api` gre na backend, vse ostalo na frontend. Brskalnik kliče `/api` na istem naslovu, zato storitvi med seboj nimata notranje vezave.
 
 Avtentikacija je JWT v piškotku `mt_session` (`httpOnly`, `SameSite=Lax`). Spreminjajoče zahteve morajo poslati glavo `X-Requested-With: MasterTask`. Globalni vlogi sta `admin` in `member`, vlogi v projektu pa `owner`, `manager`, `member` in `viewer`. Dovoljenja se preverjajo na strežniku; nečlan projekta dobi 404.
 
@@ -76,7 +76,7 @@ Samodejne objave ob pushu so izklopljene (`vercel.json` → `git.deploymentEnabl
 
 CI (`.github/workflows/ci.yml`) teče ob pushu na `main` in ob pull requestih: lint, tipi, testi in build. Ne objavlja in ne potrebuje skrivnosti.
 
-Preusmeritve: `/api/*` gre na funkcijo, vse ostalo na `index.html`. Glave vključujejo HSTS, `X-Frame-Options: DENY` in CSP z `script-src 'self'`.
+Preusmeritve: `/api/*` gre na storitev `backend`, vse ostalo na storitev `frontend`. Express še vedno vidi celotno pot `/api/...`. Glave vključujejo HSTS, `X-Frame-Options: DENY` in CSP z `script-src 'self'`.
 
 ## Preverjanje
 
