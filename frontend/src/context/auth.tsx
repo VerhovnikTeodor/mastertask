@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, type ReactN
 import { useQueryClient } from '@tanstack/react-query';
 import { api, setUnauthorizedHandler } from '../lib/api';
 import { keys, useMe } from '../api/hooks';
+import { identifyUser, track } from '../lib/analytics';
 import type { User } from '../lib/types';
 
 interface AuthContextValue {
@@ -44,6 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [qc, switchSession]);
 
+  const userId = user?.id;
+  const userRole = user?.role;
+  useEffect(() => identifyUser(userId && userRole ? { id: userId, role: userRole } : null), [userId, userRole]);
+
   useEffect(() => {
     if (!user) return;
     applyTheme(user.preferences.theme ?? 'system');
@@ -63,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const { user: u } = await api.post<{ user: User }>('/auth/login', { email, password });
+      track('login');
       switchSession(u);
       return u;
     },
@@ -72,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (data: { email: string; password: string; firstName: string; lastName: string }) => {
       const { user: u } = await api.post<{ user: User }>('/auth/register', data);
+      track('register');
       switchSession(u);
       return u;
     },
@@ -79,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    track('logout');
     try {
       await api.post('/auth/logout');
     } finally {

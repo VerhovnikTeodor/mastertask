@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { track } from '../lib/analytics';
 import type {
   ActivityEntry,
   Comment,
@@ -144,6 +145,7 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (data: ProjectInput) => api.post<{ project: ProjectDetail }>('/projects', data),
     onSuccess: ({ project }) => {
+      track('project_created');
       qc.setQueryData(keys.project(project.id), project);
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: keys.facets });
@@ -169,11 +171,19 @@ function useProjectMutation<V>(projectId: string, fn: (vars: V) => Promise<{ pro
 }
 
 export function useUpdateProject(id: string) {
-  return useProjectMutation(id, (data: ProjectInput) => api.patch(`/projects/${id}`, data));
+  return useProjectMutation(id, async (data: ProjectInput) => {
+    const res = await api.patch<{ project: ProjectDetail }>(`/projects/${id}`, data);
+    track('project_updated');
+    return res;
+  });
 }
 
 export function useArchiveProject(id: string) {
-  return useProjectMutation(id, (archive: boolean) => api.post(`/projects/${id}/${archive ? 'archive' : 'restore'}`));
+  return useProjectMutation(id, async (archive: boolean) => {
+    const res = await api.post<{ project: ProjectDetail }>(`/projects/${id}/${archive ? 'archive' : 'restore'}`);
+    track(archive ? 'project_archived' : 'project_restored');
+    return res;
+  });
 }
 
 export function useDeleteProject() {
@@ -181,6 +191,7 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/projects/${id}`),
     onSuccess: (_d, id) => {
+      track('project_deleted');
       qc.removeQueries({ queryKey: keys.project(id) });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: keys.facets });
@@ -245,7 +256,10 @@ export function useMemberMutations(projectId: string) {
     add: useMutation({
       mutationFn: (data: { userId: string; role: string }) =>
         api.post<{ members: ProjectMember[] }>(`/projects/${projectId}/members`, data),
-      onSuccess: refresh,
+      onSuccess: () => {
+        track('member_added');
+        refresh();
+      },
     }),
     changeRole: useMutation({
       mutationFn: ({ userId, role }: { userId: string; role: string }) =>
@@ -305,7 +319,10 @@ export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: TaskInput) => api.post<{ task: Task }>('/tasks', data),
-    onSuccess: ({ task }) => invalidateTaskViews(qc, task.projectId),
+    onSuccess: ({ task }) => {
+      track('task_created');
+      invalidateTaskViews(qc, task.projectId);
+    },
   });
 }
 
@@ -314,6 +331,7 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ id, ...data }: TaskInput & { id: string }) => api.patch<{ task: Task }>(`/tasks/${id}`, data),
     onSuccess: ({ task }) => {
+      track('task_updated');
       invalidateTaskViews(qc, task.projectId, task.id);
       qc.invalidateQueries({ queryKey: keys.taskActivity(task.id) });
     },
@@ -332,6 +350,7 @@ export function useMoveTask(projectId: string) {
       qc.setQueryData(keys.board(projectId), optimistic);
       return { previous };
     },
+    onSuccess: () => track('task_moved'),
     onError: (_err, _vars, context) => {
       if (context?.previous) qc.setQueryData(keys.board(projectId), context.previous);
     },
@@ -345,6 +364,7 @@ export function useTaskAction() {
     mutationFn: ({ id, action }: { id: string; projectId: string; action: 'archive' | 'restore' | 'delete' }) =>
       action === 'delete' ? api.delete(`/tasks/${id}`) : api.post(`/tasks/${id}/${action}`),
     onSuccess: (_d, { id, projectId, action }) => {
+      track(action === 'archive' ? 'task_archived' : action === 'restore' ? 'task_restored' : 'task_deleted');
       if (action === 'delete') qc.removeQueries({ queryKey: keys.task(id) });
       invalidateTaskViews(qc, projectId, action === 'delete' ? undefined : id);
     },
@@ -409,7 +429,13 @@ export function useCommentMutations(taskId: string, projectId: string) {
     qc.invalidateQueries({ queryKey: keys.task(taskId) });
   };
   return {
-    add: useMutation({ mutationFn: (body: string) => api.post(`/tasks/${taskId}/comments`, { body }), onSuccess: refresh }),
+    add: useMutation({
+      mutationFn: (body: string) => api.post(`/tasks/${taskId}/comments`, { body }),
+      onSuccess: () => {
+        track('comment_added');
+        refresh();
+      },
+    }),
     update: useMutation({
       mutationFn: ({ id, body }: { id: string; body: string }) => api.patch(`/comments/${id}`, { body }),
       onSuccess: refresh,
@@ -508,7 +534,10 @@ export function useSavedViewMutations() {
     save: useMutation({
       mutationFn: (data: { name: string; filters: Record<string, string | string[]> }) =>
         api.post<{ view: SavedView }>('/views', data),
-      onSuccess: () => qc.invalidateQueries({ queryKey: keys.views }),
+      onSuccess: () => {
+        track('saved_view_created');
+        qc.invalidateQueries({ queryKey: keys.views });
+      },
     }),
     remove: useMutation({
       mutationFn: (id: string) => api.delete(`/views/${id}`),

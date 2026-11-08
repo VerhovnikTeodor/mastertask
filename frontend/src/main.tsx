@@ -2,16 +2,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
-import Clarity from '@microsoft/clarity';
 import { ApiError } from './lib/api';
+import { initAnalytics } from './lib/analytics';
 import { App } from './App';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/ui.css';
 import './styles/app.css';
 
-// Analitika Microsoft Clarity – samo v produkcijskem buildu, ne med lokalnim razvojem.
-if (import.meta.env.PROD) Clarity.init('zag4we6wah');
+initAnalytics();
 
 const queryClient = new QueryClient({
   defaultOptions: {
